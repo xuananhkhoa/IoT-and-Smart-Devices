@@ -1,0 +1,61 @@
+<html>
+<head>
+    <link rel="stylesheet" href="https://atlas.microsoft.com/sdk/javascript/mapcontrol/2/atlas.min.css" type="text/css" />
+    <script src="https://atlas.microsoft.com/sdk/javascript/mapcontrol/2/atlas.min.js"></script>
+    <style>
+        #myMap {
+            width:100%;
+            height:100%;
+        }
+    </style>
+    <script type='text/javascript'>
+        var map, features = [];
+
+        async function init() {
+            const response = await fetch("https://gpsstorage10423043.blob.core.windows.net/gps-data/?restype=container&comp=list");
+            const text = await response.text();
+            const xml = new window.DOMParser().parseFromString(text, "text/xml");
+            const blobList = Array.from(xml.querySelectorAll("Url")).map(urlNode => urlNode.textContent);
+
+            // Wait for all JSON files to be loaded
+            await Promise.all(blobList.map(loadJSON));
+
+            // Now initialize the map and add features
+            map = new atlas.Map('myMap', {
+                center: [106.6133, 11.1065],
+                zoom: 14,
+                authOptions: {
+                    authType: "subscriptionKey",
+                    subscriptionKey: "YOUR_KEY_HERE"
+                }
+            });
+
+            map.events.add('ready', function () {
+                var source = new atlas.source.DataSource();
+                map.sources.add(source);
+                map.layers.add(new atlas.layer.BubbleLayer(source));
+                console.log("Loaded features:", features);
+                source.add(features);
+            });
+        }
+
+        async function loadJSON(file) {
+            const response = await fetch(file);
+            if (!response.ok) return;
+
+            const gps = await response.json();
+            try {
+                const lat = parseFloat(gps.gps.gps.lat);
+                const lng = parseFloat(gps.gps.gps.lng);
+                features.push(new atlas.data.Feature(new atlas.data.Point([lng, lat])));
+            } catch (e) {
+                console.error("Invalid GPS format in file:", file);
+            }
+        }
+    </script>
+</head>
+
+<body onload="init()">
+    <div id="myMap"></div>
+</body>
+</html>
